@@ -47,6 +47,11 @@ public void OnPluginStart()
     RegConsoleCmd("sm_disablefgm", OnDFGMCommand, "Starts the vote to disable FGM");
 }
 
+public void OnMapStart()
+{
+    DisableFGM();
+}
+
 // FGM command handler
 public Action:OnFGMCommand(int client, int args)
 {
@@ -148,13 +153,7 @@ public VoteResult(Menu:menu, int num_votes, int num_clients, const int[][] clien
         }
         else // FGM is disabled
         {
-            gFGMEnabled = true;
-            // Start paying attention to round wins
-            HookEvent("teamplay_round_win", OnRoundWin);
-            HookEvent("teamplay_round_start", OnRoundStart);
-            HookEvent("player_team", HookPlayerChangeTeam);
-            // Disable autobalance so we don't have problems
-            ServerCommand("mp_autoteambalance 0");
+            EnableFGM();    
             PrintToChatAll("[FewGoodMen] Vote to enable fgm succeeded.");
         }
     }
@@ -163,16 +162,6 @@ public VoteResult(Menu:menu, int num_votes, int num_clients, const int[][] clien
         // FGM is enabled
         if (gFGMEnabled == true)
         {
-            gFGMEnabled = false;
-            gConsecutiveWins = 0;
-            gRedWinning = false;
-            gFirstRound = true;
-            // Stop paying attention to round wins
-            UnhookEvent("teamplay_round_win", OnRoundWin);
-            UnhookEvent("teamplay_round_start", OnRoundStart);
-            UnhookEvent("player_team", HookPlayerChangeTeam);
-            // Re-enable autobalance
-            ServerCommand("mp_autoteambalance 1");
             PrintToChatAll("[FewGoodMen] Vote to disable fgm succeeded.");
         }
         else // FGM is already disabled
@@ -192,6 +181,31 @@ public VoteResult(Menu:menu, int num_votes, int num_clients, const int[][] clien
             PrintToChatAll("[FewGoodMen] Vote to enable fgm failed.");
         }
     }
+}
+
+public EnableFGM()
+{
+    gFGMEnabled = true;
+    // Start paying attention to round wins
+    HookEvent("teamplay_round_win", OnRoundWin);
+    HookEvent("teamplay_round_start", OnRoundStart);
+    HookEvent("player_team", HookPlayerChangeTeam);
+    // Disable autobalance so we don't have problems
+    ServerCommand("mp_autoteambalance 0");
+}
+
+public DisableFGM()
+{
+    gFGMEnabled = false;
+    gConsecutiveWins = 0;
+    gRedWinning = false;
+    gFirstRound = true;
+    // Stop paying attention to round wins
+    UnhookEvent("teamplay_round_win", OnRoundWin);
+    UnhookEvent("teamplay_round_start", OnRoundStart);
+    UnhookEvent("player_team", HookPlayerChangeTeam);
+    // Re-enable autobalance
+    ServerCommand("mp_autoteambalance 1");
 }
 
 public HandleVoteMenu(Menu:menu, MenuAction:action, param1, param2)
