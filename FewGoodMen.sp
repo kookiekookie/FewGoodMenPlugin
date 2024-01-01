@@ -3,9 +3,9 @@
 
 #pragma semicolon 1
 
-#define PL_VERSION "2.0.4"
+#define PL_VERSION "2.0.5"
 // Constants
-new const Float:COOLDOWN_DURATION = 300.0; // 5 minutes cooldown in seconds
+int COOLDOWN_DURATION = 300; // 5 minutes cooldown in seconds
 
 // Global variables
 new bool:gFGMEnabled = false;  // Indicates whether FGM game mode is enabled
