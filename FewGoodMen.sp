@@ -108,10 +108,9 @@ public StartVote()
 // Done to make sure ties result in status quo, and not random chance.
 public VoteResult(Menu:menu, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
 {
-    PrintToServer("Handling Vote Results...");
     int yes_votes;
     int no_votes;
-    
+
     // There are no items, nobody voted
     if (num_items == 0)
     {
@@ -154,6 +153,8 @@ public VoteResult(Menu:menu, int num_votes, int num_clients, const int[][] clien
             HookEvent("teamplay_round_win", OnRoundWin);
             HookEvent("teamplay_round_start", OnRoundStart);
             HookEvent("player_team", HookPlayerChangeTeam);
+            // Disable autobalance so we don't have problems
+            ServerCommand("mp_autoteambalance 0");
             PrintToChatAll("[FewGoodMen] Vote to enable fgm succeeded.");
         }
     }
@@ -170,6 +171,8 @@ public VoteResult(Menu:menu, int num_votes, int num_clients, const int[][] clien
             UnhookEvent("teamplay_round_win", OnRoundWin);
             UnhookEvent("teamplay_round_start", OnRoundStart);
             UnhookEvent("player_team", HookPlayerChangeTeam);
+            // Re-enable autobalance
+            ServerCommand("mp_autoteambalance 1");
             PrintToChatAll("[FewGoodMen] Vote to disable fgm succeeded.");
         }
         else // FGM is already disabled
@@ -196,7 +199,6 @@ public HandleVoteMenu(Menu:menu, MenuAction:action, param1, param2)
 	if (action == MenuAction_End)
 	{
 		/* This is called after VoteResult */
-        PrintToServer("Closing Menu Handle...");
         CloseHandle(menu);
 	}
 }
