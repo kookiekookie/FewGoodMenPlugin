@@ -3,7 +3,10 @@
 
 #pragma semicolon 1
 
-#define PL_VERSION "2.0.5"
+#define PL_VERSION "2.0.6"
+
+#define VOTEINFO_ITEM_INDEX         0       /**< Item index */
+#define VOTEINFO_ITEM_VOTES         1       /**< Number of votes for the item */
 // Constants
 int COOLDOWN_DURATION = 300; // 5 minutes cooldown in seconds
 
@@ -105,9 +108,38 @@ public StartVote()
 // Done to make sure ties result in status quo, and not random chance.
 public VoteResult(Menu:menu, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
 {
-    int yes_votes = item_info[0][1];
-    int no_votes = item_info[1][1];
-
+    PrintToServer("Handling Vote Results...");
+    int yes_votes;
+    int no_votes;
+    
+    // There are no items, nobody voted
+    if (num_items == 0)
+    {
+        PrintToChatAll("[FewGoodMen] Vote failed, no votes were made.");
+        return;
+    }
+    else if (num_items == 1) // There is only one item, only one option was voted for.
+    {
+        int idx = item_info[0][VOTEINFO_ITEM_INDEX];
+        if (idx == 0)
+        {
+            // Yes votes won.
+            yes_votes = 1;
+            no_votes = 0;
+        }
+        else
+        {
+            // No votes won.
+            yes_votes = 0;
+            no_votes = 1;
+        }
+    }
+    else // Both options were voted for.
+    {
+        yes_votes = item_info[0][VOTEINFO_ITEM_VOTES];
+        no_votes = item_info[1][VOTEINFO_ITEM_VOTES];
+    }
+        
     if (yes_votes > no_votes)
     {
         // FGM was already enabled
@@ -125,7 +157,7 @@ public VoteResult(Menu:menu, int num_votes, int num_clients, const int[][] clien
             PrintToChatAll("[FewGoodMen] Vote to enable fgm succeeded.");
         }
     }
-    else if (no_votes > yes_votes)
+    else if (yes_votes < no_votes)
     {
         // FGM is enabled
         if (gFGMEnabled == true)
@@ -164,7 +196,8 @@ public HandleVoteMenu(Menu:menu, MenuAction:action, param1, param2)
 	if (action == MenuAction_End)
 	{
 		/* This is called after VoteResult */
-		CloseHandle(menu);
+        PrintToServer("Closing Menu Handle...");
+        CloseHandle(menu);
 	}
 }
 
