@@ -1,33 +1,42 @@
 #include <sourcemod>
-#include <sdktools.inc>
+#include <sdktools>
 
 #pragma semicolon 1
 
-#define PL_VERSION "2.0.6"
+#define PL_VERSION "2.0.7"
 
-#define VOTEINFO_ITEM_INDEX         0       /**< Item index */
-#define VOTEINFO_ITEM_VOTES         1       /**< Number of votes for the item */
 // Constants
-int COOLDOWN_DURATION = 300; // 5 minutes cooldown in seconds
+#define VOTEINFO_ITEM_INDEX     0       // Item index
+#define VOTEINFO_ITEM_VOTES     1       // Number of votes for the item 
+#define NUM_ROUNDS              3       // Number of rounds scoreHistory looks back on
+#define COOLDOWN_DURATION      300      // Cooldown for a new fgm vote to be called
+
 
 // Global variables
-new bool:gFGMEnabled = false;  // Indicates whether FGM game mode is enabled
-int gLastVoteTime = 0;  // Stores the timestamp of the last FGM vote initiation
-new bool:gRedWinning = false; // Indicates whether RED team is winning (BLU is winning if false)
-new bool:gFirstRound = true; // Indicates whether it is the first round after enabling FGM
-int gConsecutiveWins = 0; // Counts the number times the same team has won
+new bool:gFGMEnabled = false;           // Indicates whether FGM game mode is enabled
+int gLastVoteTime = 0;                  // Stores the timestamp of the last FGM vote initiation
+new bool:gRedWinning = false;           // Indicates whether RED team is winning (BLU is winning if false)
+new bool:gFirstRound = true;            // Indicates whether it is the first round after enabling FGM
+int gConsecutiveWins = 0;               // Counts the number times the same team has won
 
-// Function prototypes
-public Action:OnFGMCommand(int client, int args);
-public Action:OnDFGMCommand(int client, int args);
-public StartVote();
-public VoteResult(Menu menu, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info);
-public HandleVoteMenu(Menu:menu, MenuAction:action, param1, param2);
-public Action:OnPlayerSpawn(Handle:event, const String:name[], bool:dontBroadcast);
-public Action:OnRoundWin(Event:event, const String:name[], bool:dontBroadcast);
-public Action:HookPlayerChangeTeam(Event:event, const char[] name, bool dontBroadcast);
+enum struct PlayerData
+{
+    int totalScore;
+    int queuePointer;
+    int scoreQueue[NUM_ROUNDS];
+}
 
+void initializePlayerData(PlayerData data)
+{
+    data.totalScore = 1;
+    data.queuePointer = 2;
+    for (int i = 0; i < NUM_ROUNDS; i++)
+    {
+        data.scoreQueue[i] = i;
+    }
+}
 
+PlayerData scoreHistory[MAXPLAYERS+1]; // Array keeping track of player scores with client ids used as indexes
 
 // Main plugin information
 public Plugin:myinfo = 
@@ -47,10 +56,27 @@ public void OnPluginStart()
     RegConsoleCmd("sm_disablefgm", OnDFGMCommand, "Starts the vote to disable FGM");
 }
 
-public void OnMapStart()
+public void OnClientAuthorized(int client)
 {
-    DisableFGM();
+    // Initialize a player data
+    PlayerData data;
+    initializePlayerData(data);
+    PrintToServer("totalScore: %d\nqueuePointer: %d\nscoreQueue[0]: %d\nscoreQueue[1]: %d, scoreQueue[2]: %d\n", data.totalScore, data.queuePointer, data.scoreQueue[0], data.scoreQueue[1], data.scoreQueue[2]);
+
+    // Initialize set client user
+    scoreHistory[client] = data;
 }
+
+// Disable FGM if it's enabled when a map ends, resetting it.
+public void OnMapEnd()
+{
+    if (gFGMEnabled)
+    {
+        DisableFGM();
+    }
+}
+
+
 
 // FGM command handler
 public Action:OnFGMCommand(int client, int args)
@@ -307,17 +333,16 @@ public Action:OnRoundStart(Event:event, const char[] name, bool dontBroadcast)
 
     // Get the least contributing team member of the losing team
     int worstContributor = GetLowestScoreOnWinningTeam();
+    if (worstContributor != -1)
+    {
+        ForcePlayerToLosingTeam(worstContributor);
+    }
     return Plugin_Handled;
 }
 
 
 public ForcePlayerToLosingTeam(int client)
 {
-    if (client == -1)
-    {
-        // GetLowestScoreOnWinningTeam() returned -1, don't force player to losing team.
-        return;
-    }
     // If RED is winning, move them to BLU
     if (gRedWinning)
     {
@@ -330,13 +355,15 @@ public ForcePlayerToLosingTeam(int client)
 }
 
 // TODO: 
+// If data is less than 3 rounds, use current score
 public int GetLowestScoreOnWinningTeam()
 {
-    // Return client_id of lowest scorer? Save scores every end of round?
-    // Implement some failsafe so people don't get ping ponged?
+    
+    int clientID;
+    return clientID;
 }
 
-
+// Get score of client from client_id
 public int GetPlayerResourceTotalScore(int client)
 {
     int playerSourceEnt = GetPlayerResourceEntity();
@@ -349,5 +376,7 @@ public int GetPlayerResourceTotalScore(int client)
 // swap at the beginning of next round
 public Action:HookPlayerChangeTeam(Event:event, const char[] name, bool dontBroadcast)
 {
+    // void ChangeClientTeam(int client, int team);
     return Plugin_Handled;
 }
+
