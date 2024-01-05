@@ -3,7 +3,7 @@
 
 #pragma semicolon 1
 
-#define PL_VERSION "2.0.9"
+#define PL_VERSION "2.1.0"
 #define UNDEFINED 0
 #define RED_TEAM 2
 #define BLU_TEAM 3
@@ -33,14 +33,14 @@ enum struct PlayerData
 
 void initializePlayerData(PlayerData data)
 {
-    data.currentScore = 1;
-    data.queuePointer = 2;
+    data.currentScore = 0;
+    data.queuePointer = 0;
     for (int i = 0; i < NUM_ROUNDS; i++)
     {
         data.scoreQueue[i] = i;
     }
     data.scoreTotalDelta = 0;
-    data.useCurrentScore = false;
+    data.useCurrentScore = true;
 }
 
 PlayerData scoreHistory[MAXPLAYERS+1]; // Array keeping track of player scores with client ids used as indexes
@@ -68,13 +68,12 @@ public void OnClientAuthorized(int client)
     // Initialize a player data
     PlayerData data;
     initializePlayerData(data);
-    PrintToServer("totalScore: %d\nqueuePointer: %d\nscoreQueue[0]: %d\nscoreQueue[1]: %d, scoreQueue[2]: %d\n", data.currentScore, data.queuePointer, data.scoreQueue[0], data.scoreQueue[1], data.scoreQueue[2]);
 
     // Initialize set client user
     scoreHistory[client] = data;
 }
 
-// Disable FGM if it's enabled when a map ends, resetting it.
+// Disable FGM if it's enabled when a map ends, thereby resetting it.
 public void OnMapEnd()
 {
     if (gFGMEnabled)
@@ -92,13 +91,13 @@ public Action:OnFGMCommand(int client, int args)
     {
         PrintToChat(client, "FewGoodMen is already enabled. Start a vote to disable it with /dfgm");
     }
-    else if (IsVoteInProgress())
-    {
-        PrintToChat(client, "Another vote is currently in progress.");
-    }
     else if ((GetTime() - gLastVoteTime) < COOLDOWN_DURATION)
     {
         PrintToChat(client, "[FewGoodMen] You must wait %d seconds before initiating another vote.", COOLDOWN_DURATION - GetTime() + gLastVoteTime);
+    }
+    else if (IsVoteInProgress())
+    {
+        PrintToChat(client, "Another vote is currently in progress.");
     }
     else // If no vote is in progress, and it is past the cooldown time, start the vote.
     {
@@ -251,7 +250,6 @@ public HandleVoteMenu(Menu:menu, MenuAction:action, param1, param2)
 
 
 // Round win event handler
-// TODO: Update client playerHistory
 public Action:OnRoundWin(Event:event, const char[] name, bool dontBroadcast)
 {
     int winner = event.GetInt("team");
@@ -259,6 +257,26 @@ public Action:OnRoundWin(Event:event, const char[] name, bool dontBroadcast)
     if (winner == BLU_TEAM || winner == RED_TEAM)
     {
         HandleWinningTeam(winner);
+    }
+    // Update scoreHistory
+    for(int i = 0; i <= MaxClients; i++)
+    {
+        if (IsClientInGame(i))
+        {
+            // Update score delta
+            scoreHistory[i].scoreQueue[scoreHistory[i].queuePointer] = GetPlayerResourceTotalScore(i) - scoreHistory[i].currentScore;
+            // Update currentScore
+            scoreHistory[i].currentScore = GetPlayerResourceTotalScore(i);
+            // Update score delta sum
+            scoreHistory[i].scoreTotalDelta += scoreHistory[i].scoreQueue[scoreHistory[i].queuePointer];
+            // Set queue pointer
+            scoreHistory[i].queuePointer = (scoreHistory[i].queuePointer + 1) % 3;
+            // If queue pointer is 0, that means queue looped back, so set useCurrentScore to false
+            if (scoreHistory[i].queuePointer == 0)
+            {
+                scoreHistory[i].useCurrentScore = false;
+            }
+        }
     }
 
     return Plugin_Handled;
@@ -272,7 +290,7 @@ public HandleWinningTeam(int latestWinner)
         if (latestWinner == winningTeam)
         {
             // The consecutive winner won again
-            gConsecutiveWins = gConsecutiveWins + 1;
+            gConsecutiveWins += 1;
         }
         else
         {
@@ -310,15 +328,18 @@ public HandleWinningTeam(int latestWinner)
     }
 
     // Evaluate gConsecutiveWins
-    if (winningTeam == RED_TEAM)
+    if (gConsecutiveWins > 1)
     {
-        // RED team won
-        PrintToChatAll("[FewGoodMen] RED team has %d straight wins!", gConsecutiveWins);
-    }
-    else if (winningTeam == BLU_TEAM)
-    {
-        // BLU team won
-        PrintToChatAll("[FewGoodMen] BLU team has %d straight wins!", gConsecutiveWins);
+        if (winningTeam == RED_TEAM)
+        {
+            // RED team won
+            PrintToChatAll("[FewGoodMen] RED team has %d straight wins!", gConsecutiveWins);
+        }
+        else if (winningTeam == BLU_TEAM)
+        {
+            // BLU team won
+            PrintToChatAll("[FewGoodMen] BLU team has %d straight wins!", gConsecutiveWins);
+        }
     }
 }
 
@@ -347,6 +368,7 @@ public int GetLowestScoreOnWinningTeam()
 {
     int lowestScore = 2048; // Arbitrarily large 
     int index = 0;
+    // Get minimum score on winning team
     for(int i = 0; i <= MaxClients; i++)
     {
         if (IsClientInGame(i) && (GetClientTeam(i) == winningTeam))
