@@ -4,6 +4,9 @@
 #pragma semicolon 1
 
 #define PL_VERSION "2.0.7"
+#define UNDEFINED 0
+#define RED_TEAM 2
+#define BLU_TEAM 3
 
 // Constants
 #define VOTEINFO_ITEM_INDEX     0       // Item index
@@ -15,9 +18,9 @@
 // Global variables
 new bool:gFGMEnabled = false;           // Indicates whether FGM game mode is enabled
 int gLastVoteTime = 0;                  // Stores the timestamp of the last FGM vote initiation
-new bool:gRedWinning = false;           // Indicates whether RED team is winning (BLU is winning if false)
-new bool:gFirstRound = true;            // Indicates whether it is the first round after enabling FGM
-int gConsecutiveWins = 0;               // Counts the number times the same team has won
+int winningTeam = UNDEFINED;            // Indicates which team is winning team
+int lastWinner = UNDEFINED;             // Indicates which team won the previous round
+int gConsecutiveWins = 0;               // Counts the number of times the same team has won
 
 enum struct PlayerData
 {
@@ -212,6 +215,8 @@ public VoteResult(Menu:menu, int num_votes, int num_clients, const int[][] clien
 public EnableFGM()
 {
     gFGMEnabled = true;
+    winningTeam = UNDEFINED;
+    gConsecutiveWins = 0;
     // Start paying attention to round wins
     HookEvent("teamplay_round_win", OnRoundWin);
     HookEvent("teamplay_round_start", OnRoundStart);
@@ -223,9 +228,6 @@ public EnableFGM()
 public DisableFGM()
 {
     gFGMEnabled = false;
-    gConsecutiveWins = 0;
-    gRedWinning = false;
-    gFirstRound = true;
     // Stop paying attention to round wins
     UnhookEvent("teamplay_round_win", OnRoundWin);
     UnhookEvent("teamplay_round_start", OnRoundStart);
@@ -248,76 +250,72 @@ public HandleVoteMenu(Menu:menu, MenuAction:action, param1, param2)
 public Action:OnRoundWin(Event:event, const char[] name, bool dontBroadcast)
 {
     int winner = event.GetInt("team");
-    // RED = 2, BLU = 3
-    if (winner == 2)
+    // Make sure either team won
+    if (winner == BLU_TEAM || winner == RED_TEAM)
     {
-        HandleWinningTeam(true);
-    }
-    else if (winner == 3)
-    {
-        HandleWinningTeam(false);
-    }
-    else
-    {
-        // Stalemate occurred. Do nothing. Don't update gFirstRound.
-        return Plugin_Handled;
+        HandleWinningTeam(winner);
     }
 
-    if (gFirstRound == true)
-    {
-        // The first round has passed
-        gFirstRound = false;
-    }
     return Plugin_Handled;
 }
 
-public HandleWinningTeam(bool latestWinner)
+public HandleWinningTeam(int latestWinner)
 {
-    // The winning team won last round
-    if (gRedWinning == latestWinner)
+    if (winningTeam != UNDEFINED)
     {
-        // No need to set gRedWinning, it did not change.
-        // Increment gConsecutiveWins by 1
-        gConsecutiveWins = gConsecutiveWins + 1;
-    }
-    else // The winning team lost last round
-    {
-        // Did it lose twice in a row? Or did RED team win the first round after /fgm?
-        if (gConsecutiveWins == 0)
+        // There is a consecutive winner
+        if (latestWinner == winningTeam)
         {
-            // The losing team won twice in a row or RED team won the first round
-            // The losing team becomes the winning team 
-            gRedWinning = !gRedWinning;
-            // Is it the first round after /fgm?
-            if (gFirstRound == true)
-            {
-                // They've only won once
-                gConsecutiveWins = 1;
-            }
-            else
-            {
-                // The now winning team has won twice in a row
-                gConsecutiveWins = 2;
-            } 
+            // The consecutive winner won again
+            gConsecutiveWins = gConsecutiveWins + 1;
         }
         else
         {
-            // The winning team lost its streak
-            gConsecutiveWins = 0;
+            // The consecutive winner lost
+            if (gConsecutiveWins == 0)
+            {
+                // The consecutive winner lost twice in a row
+                winningTeam = 3 - latestWinner;
+                gConsecutiveWins = 2;
+            }
+            else
+            {
+                // The consecutive winner lost once
+                gConsecutiveWins = 0;
+                return;
+            }
+        }
+    }
+    else
+    {
+        // There isn't a consecutive winner
+        if (gConsecutiveWins == 0)
+        {
+            gConsecutiveWins = 1;
+            lastWinner = latestWinner;
+            return;
+        }
+        else if (lastWinner == latestWinner)
+        {
+            gConsecutiveWins = 2;
+            winningTeam = latestWinner;
+        }
+        else
+        {
+            
         }
     }
 
     // Evaluate gConsecutiveWins
-    if (gConsecutiveWins > 1)
+    if (winningTeam == RED_TEAM)
     {
-        if (gRedWinning)
-        {
-            PrintToChatAll("[FewGoodMen] RED team has %d straight wins!", gConsecutiveWins);
-        }
-        else
-        {
-            PrintToChatAll("[FewGoodMen] BLU team has %d straight wins!", gConsecutiveWins);
-        }
+        // RED team won
+        PrintToChatAll("[FewGoodMen] RED team has %d straight wins!", gConsecutiveWins);
+    }
+    else if (winningTeam == BLU_TEAM)
+    {
+        // BLU team won
+        PrintToChatAll("[FewGoodMen] BLU team has %d straight wins!", gConsecutiveWins);
     }
 }
 
@@ -326,17 +324,17 @@ public HandleWinningTeam(bool latestWinner)
 public Action:OnRoundStart(Event:event, const char[] name, bool dontBroadcast)
 {
     // Evaluate gConsecutiveWins. Don't do anything if no consecutive wins.
-    if (gConsecutiveWins < 2)
+    if (gConsecutiveWins > 2)
     {
-        return Plugin_Handled;
+        // Get the least contributing team member of the losing team
+        int worstContributor = GetLowestScoreOnWinningTeam();
+        if (worstContributor != -1)
+        {
+            ForcePlayerToLosingTeam(worstContributor);
+            PrintToChatAll("[FewGoodMen] Moving a player to the losing team.");
+        }
     }
-
-    // Get the least contributing team member of the losing team
-    int worstContributor = GetLowestScoreOnWinningTeam();
-    if (worstContributor != -1)
-    {
-        ForcePlayerToLosingTeam(worstContributor);
-    }
+    
     return Plugin_Handled;
 }
 
@@ -344,7 +342,7 @@ public Action:OnRoundStart(Event:event, const char[] name, bool dontBroadcast)
 public ForcePlayerToLosingTeam(int client)
 {
     // If RED is winning, move them to BLU
-    if (gRedWinning)
+    if (winningTeam == RED_TEAM)
     {
         ChangeClientTeam(client, 3);
     }
@@ -372,8 +370,6 @@ public int GetPlayerResourceTotalScore(int client)
 
 // TODO: If player attempts to change teams to winning team, send them to losing team
 // no message if no swap
-// swap message: [FewGoodMen] Moving a player to the losing team.
-// swap at the beginning of next round
 public Action:HookPlayerChangeTeam(Event:event, const char[] name, bool dontBroadcast)
 {
     // void ChangeClientTeam(int client, int team);
