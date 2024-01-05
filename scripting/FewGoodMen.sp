@@ -3,7 +3,7 @@
 
 #pragma semicolon 1
 
-#define PL_VERSION "2.0.7"
+#define PL_VERSION "2.0.8"
 #define UNDEFINED 0
 #define RED_TEAM 2
 #define BLU_TEAM 3
@@ -24,19 +24,23 @@ int gConsecutiveWins = 0;               // Counts the number of times the same t
 
 enum struct PlayerData
 {
-    int totalScore;
+    int currentScore;
     int queuePointer;
     int scoreQueue[NUM_ROUNDS];
+    int scoreTotalDelta;
+    bool useCurrentScore;
 }
 
 void initializePlayerData(PlayerData data)
 {
-    data.totalScore = 1;
+    data.currentScore = 1;
     data.queuePointer = 2;
     for (int i = 0; i < NUM_ROUNDS; i++)
     {
         data.scoreQueue[i] = i;
     }
+    data.scoreTotalDelta = 0;
+    data.useCurrentScore = false;
 }
 
 PlayerData scoreHistory[MAXPLAYERS+1]; // Array keeping track of player scores with client ids used as indexes
@@ -64,7 +68,7 @@ public void OnClientAuthorized(int client)
     // Initialize a player data
     PlayerData data;
     initializePlayerData(data);
-    PrintToServer("totalScore: %d\nqueuePointer: %d\nscoreQueue[0]: %d\nscoreQueue[1]: %d, scoreQueue[2]: %d\n", data.totalScore, data.queuePointer, data.scoreQueue[0], data.scoreQueue[1], data.scoreQueue[2]);
+    PrintToServer("totalScore: %d\nqueuePointer: %d\nscoreQueue[0]: %d\nscoreQueue[1]: %d, scoreQueue[2]: %d\n", data.currentScore, data.queuePointer, data.scoreQueue[0], data.scoreQueue[1], data.scoreQueue[2]);
 
     // Initialize set client user
     scoreHistory[client] = data;
@@ -247,6 +251,7 @@ public HandleVoteMenu(Menu:menu, MenuAction:action, param1, param2)
 
 
 // Round win event handler
+// TODO: Update client playerHistory
 public Action:OnRoundWin(Event:event, const char[] name, bool dontBroadcast)
 {
     int winner = event.GetInt("team");
@@ -289,20 +294,18 @@ public HandleWinningTeam(int latestWinner)
     else
     {
         // There isn't a consecutive winner
-        if (gConsecutiveWins == 0)
+        if (gConsecutiveWins == 0 || lastWinner != latestWinner)
         {
+            // It's the first time latestWinner wins, or it's the first round
             gConsecutiveWins = 1;
             lastWinner = latestWinner;
             return;
         }
-        else if (lastWinner == latestWinner)
+        else // if ((gConsecutiveWins != 0) && (lastWinner == latestWinner))
         {
+            // It's the second time in a row latestWinner wins
             gConsecutiveWins = 2;
             winningTeam = latestWinner;
-        }
-        else
-        {
-            
         }
     }
 
@@ -323,14 +326,14 @@ public HandleWinningTeam(int latestWinner)
 // Round start event handler
 public Action:OnRoundStart(Event:event, const char[] name, bool dontBroadcast)
 {
-    // Evaluate gConsecutiveWins. Don't do anything if no consecutive wins.
-    if (gConsecutiveWins > 2)
+    // Evaluate gConsecutiveWins. Don't do anything if no consecutive wins. Don't do anything if winningTeam only has one player.
+    if ((gConsecutiveWins > 2) && GetTeamClientCount(winningTeam) > 1)
     {
         // Get the least contributing team member of the losing team
         int worstContributor = GetLowestScoreOnWinningTeam();
         if (worstContributor != -1)
         {
-            ForcePlayerToLosingTeam(worstContributor);
+            ChangeClientTeam(worstContributor, 5 - winningTeam);
             PrintToChatAll("[FewGoodMen] Moving a player to the losing team.");
         }
     }
@@ -339,26 +342,32 @@ public Action:OnRoundStart(Event:event, const char[] name, bool dontBroadcast)
 }
 
 
-public ForcePlayerToLosingTeam(int client)
-{
-    // If RED is winning, move them to BLU
-    if (winningTeam == RED_TEAM)
-    {
-        ChangeClientTeam(client, 3);
-    }
-    else // Otherwise move them to RED
-    {
-        ChangeClientTeam(client, 2);
-    }
-}
 
-// TODO: 
-// If data is less than 3 rounds, use current score
 public int GetLowestScoreOnWinningTeam()
 {
-    
-    int clientID;
-    return clientID;
+    int lowestScore = 10000; // Arbitrarily large 
+    int index = 0;
+    for(int i = 0; i <= MaxClients; i++)
+    {
+        if (IsClientInGame(i) && (GetClientTeam(i) == winningTeam))
+        {
+            if (scoreHistory[i].useCurrentScore != true)
+            {
+                if (scoreHistory[i].scoreTotalDelta < lowestScore)
+                {
+                    lowestScore = scoreHistory[i].scoreTotalDelta;
+                    index = i;
+                }
+            }
+            else if (scoreHistory[i].currentScore < lowestScore)
+            {
+                lowestScore = scoreHistory[i].currentScore;
+                index = i;
+            }
+        }
+    }
+
+    return index;
 }
 
 // Get score of client from client_id
