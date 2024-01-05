@@ -3,7 +3,7 @@
 
 #pragma semicolon 1
 
-#define PL_VERSION "2.1.0"
+#define PL_VERSION "2.1.1"
 #define UNDEFINED 0
 #define RED_TEAM 2
 #define BLU_TEAM 3
@@ -219,6 +219,7 @@ public EnableFGM()
 {
     gFGMEnabled = true;
     winningTeam = UNDEFINED;
+    lastWinner = UNDEFINED;
     gConsecutiveWins = 0;
     // Start paying attention to round wins
     HookEvent("teamplay_round_win", OnRoundWin);
