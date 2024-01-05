@@ -353,11 +353,8 @@ public Action:OnRoundStart(Event:event, const char[] name, bool dontBroadcast)
     {
         // Get the least contributing team member of the losing team
         int worstContributor = GetLowestScoreOnWinningTeam();
-        if (worstContributor != -1)
-        {
-            ChangeClientTeam(worstContributor, 5 - winningTeam);
-            PrintToChatAll("[FewGoodMen] Moving a player to the losing team.");
-        }
+        ChangeClientTeam(worstContributor, 5 - winningTeam);
+        PrintToChatAll("[FewGoodMen] Moving a player to the losing team.");
     }
     
     return Plugin_Handled;
