@@ -3,7 +3,7 @@
 
 #pragma semicolon 1
 
-#define PL_VERSION "2.1.1"
+#define PL_VERSION "2.1.2"
 #define UNDEFINED 0
 #define RED_TEAM 2
 #define BLU_TEAM 3
