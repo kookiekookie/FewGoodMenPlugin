@@ -349,7 +349,7 @@ public HandleWinningTeam(int latestWinner)
 public Action:OnRoundStart(Event:event, const char[] name, bool dontBroadcast)
 {
     // Evaluate gConsecutiveWins. Don't do anything if no consecutive wins. Don't do anything if winningTeam only has one player.
-    if ((gConsecutiveWins > 2) && GetTeamClientCount(winningTeam) > 1)
+    if ((gConsecutiveWins > 1) && GetTeamClientCount(winningTeam) > 1)
     {
         // Get the least contributing team member of the losing team
         int worstContributor = GetLowestScoreOnWinningTeam();
