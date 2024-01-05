@@ -3,7 +3,7 @@
 
 #pragma semicolon 1
 
-#define PL_VERSION "2.0.8"
+#define PL_VERSION "2.0.9"
 #define UNDEFINED 0
 #define RED_TEAM 2
 #define BLU_TEAM 3
@@ -224,7 +224,7 @@ public EnableFGM()
     // Start paying attention to round wins
     HookEvent("teamplay_round_win", OnRoundWin);
     HookEvent("teamplay_round_start", OnRoundStart);
-    HookEvent("player_team", HookPlayerChangeTeam);
+    HookEvent("player_team", OnTeamChange);
     // Disable autobalance so we don't have problems
     ServerCommand("mp_autoteambalance 0");
 }
@@ -235,7 +235,7 @@ public DisableFGM()
     // Stop paying attention to round wins
     UnhookEvent("teamplay_round_win", OnRoundWin);
     UnhookEvent("teamplay_round_start", OnRoundStart);
-    UnhookEvent("player_team", HookPlayerChangeTeam);
+    UnhookEvent("player_team", OnTeamChange);
     // Re-enable autobalance
     ServerCommand("mp_autoteambalance 1");
 }
@@ -345,7 +345,7 @@ public Action:OnRoundStart(Event:event, const char[] name, bool dontBroadcast)
 
 public int GetLowestScoreOnWinningTeam()
 {
-    int lowestScore = 10000; // Arbitrarily large 
+    int lowestScore = 2048; // Arbitrarily large 
     int index = 0;
     for(int i = 0; i <= MaxClients; i++)
     {
@@ -370,18 +370,25 @@ public int GetLowestScoreOnWinningTeam()
     return index;
 }
 
-// Get score of client from client_id
+// Get score of client from clientID
 public int GetPlayerResourceTotalScore(int client)
 {
     int playerSourceEnt = GetPlayerResourceEntity();
     return GetEntProp(playerSourceEnt, Prop_Send, "m_iTotalScore", _, client);
 }
 
-// TODO: If player attempts to change teams to winning team, send them to losing team
-// no message if no swap
-public Action:HookPlayerChangeTeam(Event:event, const char[] name, bool dontBroadcast)
+// If player attempts to change teams to winning team, send them to losing team
+public Action:OnTeamChange(Event:event, const char[] name, bool dontBroadcast)
 {
-    // void ChangeClientTeam(int client, int team);
+    if (event.GetInt("team") == winningTeam)
+    {
+        // They've joined the winning team.
+        int clientID = GetClientOfUserId(event.GetInt("userid"));
+        // Move them to losing team
+        ChangeClientTeam(clientID, 5 - winningTeam);
+        // Send message explaining
+        PrintToChat(clientID, "[FewGoodMen] You may not join the winning team.");
+    }
     return Plugin_Handled;
 }
 
