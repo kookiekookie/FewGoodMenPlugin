@@ -3,7 +3,7 @@
 
 #pragma semicolon 1
 
-#define PL_VERSION "2.1.2"
+#define PL_VERSION "2.1.3"
 #define UNDEFINED 0
 #define RED_TEAM 2
 #define BLU_TEAM 3
@@ -56,14 +56,14 @@ public Plugin:myinfo =
 };
 
 // Plugin initialization
-public void OnPluginStart()
+public OnPluginStart()
 {
     RegConsoleCmd("sm_fgm", OnFGMCommand, "Starts the vote to enable FGM");
     RegConsoleCmd("sm_dfgm", OnDFGMCommand, "Starts the vote to disable FGM");
     RegConsoleCmd("sm_disablefgm", OnDFGMCommand, "Starts the vote to disable FGM");
 }
 
-public void OnClientAuthorized(int client)
+public OnClientAuthorized(int client)
 {
     // Initialize a player data
     PlayerData data;
@@ -74,7 +74,7 @@ public void OnClientAuthorized(int client)
 }
 
 // Disable FGM if it's enabled when a map ends, thereby resetting it.
-public void OnMapEnd()
+public OnMapEnd()
 {
     if (gFGMEnabled)
     {
@@ -85,7 +85,7 @@ public void OnMapEnd()
 
 
 // FGM command handler
-public Action:OnFGMCommand(int client, int args)
+Action:OnFGMCommand(int client, int args)
 {
     if (gFGMEnabled == true)
     {
@@ -108,7 +108,7 @@ public Action:OnFGMCommand(int client, int args)
 }
 
 // DFGM command handler
-public Action:OnDFGMCommand(int client, int args)
+Action:OnDFGMCommand(int client, int args)
 {
     if (gFGMEnabled == false)
     {
@@ -131,7 +131,7 @@ public Action:OnDFGMCommand(int client, int args)
 }
 
 // Start the FGM vote
-public StartVote()
+void StartVote()
 {
     new Menu:menu = CreateMenu(HandleVoteMenu);
     SetMenuTitle(menu, "Enable Few Good Men?");
@@ -143,7 +143,7 @@ public StartVote()
 }
 
 // Done to make sure ties result in status quo, and not random chance.
-public VoteResult(Menu:menu, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
+void VoteResult(Menu:menu, int num_votes, int num_clients, const int[][] client_info, int num_items, const int[][] item_info)
 {
     int yes_votes;
     int no_votes;
@@ -215,7 +215,7 @@ public VoteResult(Menu:menu, int num_votes, int num_clients, const int[][] clien
     }
 }
 
-public EnableFGM()
+void EnableFGM()
 {
     gFGMEnabled = true;
     winningTeam = UNDEFINED;
@@ -229,7 +229,7 @@ public EnableFGM()
     ServerCommand("mp_autoteambalance 0");
 }
 
-public DisableFGM()
+void DisableFGM()
 {
     gFGMEnabled = false;
     // Stop paying attention to round wins
@@ -251,7 +251,7 @@ public HandleVoteMenu(Menu:menu, MenuAction:action, param1, param2)
 
 
 // Round win event handler
-public Action:OnRoundWin(Event:event, const char[] name, bool dontBroadcast)
+Action:OnRoundWin(Event:event, const char[] name, bool dontBroadcast)
 {
     int winner = event.GetInt("team");
     // Make sure either team won
@@ -283,7 +283,7 @@ public Action:OnRoundWin(Event:event, const char[] name, bool dontBroadcast)
     return Plugin_Handled;
 }
 
-public HandleWinningTeam(int latestWinner)
+void HandleWinningTeam(int latestWinner)
 {
     if (winningTeam != UNDEFINED)
     {
@@ -346,7 +346,7 @@ public HandleWinningTeam(int latestWinner)
 
 
 // Round start event handler
-public Action:OnRoundStart(Event:event, const char[] name, bool dontBroadcast)
+Action:OnRoundStart(Event:event, const char[] name, bool dontBroadcast)
 {
     // Evaluate gConsecutiveWins. Don't do anything if no consecutive wins. Don't do anything if winningTeam only has one player.
     if ((gConsecutiveWins > 1) && GetTeamClientCount(winningTeam) > 1)
@@ -362,7 +362,7 @@ public Action:OnRoundStart(Event:event, const char[] name, bool dontBroadcast)
 
 
 
-public int GetLowestScoreOnWinningTeam()
+int GetLowestScoreOnWinningTeam()
 {
     int lowestScore = 2048; // Arbitrarily large 
     int index = 0;
@@ -391,14 +391,14 @@ public int GetLowestScoreOnWinningTeam()
 }
 
 // Get score of client from clientID
-public int GetPlayerResourceTotalScore(int client)
+int GetPlayerResourceTotalScore(int client)
 {
     int playerSourceEnt = GetPlayerResourceEntity();
     return GetEntProp(playerSourceEnt, Prop_Send, "m_iTotalScore", _, client);
 }
 
 // If player attempts to change teams to winning team, send them to losing team
-public Action:OnTeamChange(Event:event, const char[] name, bool dontBroadcast)
+Action:OnTeamChange(Event:event, const char[] name, bool dontBroadcast)
 {
     if (event.GetInt("team") == winningTeam)
     {
@@ -411,4 +411,3 @@ public Action:OnTeamChange(Event:event, const char[] name, bool dontBroadcast)
     }
     return Plugin_Handled;
 }
-
