@@ -3,7 +3,7 @@
 
 #pragma semicolon 1
 
-#define PL_VERSION "2.1.3"
+#define PL_VERSION "2.2.0"
 #define UNDEFINED 0
 #define RED_TEAM 2
 #define BLU_TEAM 3
@@ -12,7 +12,7 @@
 #define VOTEINFO_ITEM_INDEX     0       // Item index
 #define VOTEINFO_ITEM_VOTES     1       // Number of votes for the item 
 #define NUM_ROUNDS              3       // Number of rounds scoreHistory looks back on
-#define COOLDOWN_DURATION      300      // Cooldown for a new fgm vote to be called
+#define COOLDOWN_DURATION      180     // Cooldown for a new fgm vote to be called
 
 
 // Global variables
@@ -76,6 +76,7 @@ public OnClientAuthorized(int client)
 // Disable FGM if it's enabled when a map ends, thereby resetting it.
 public OnMapEnd()
 {
+    gLastVoteTime = 0;
     if (gFGMEnabled)
     {
         DisableFGM();
@@ -134,7 +135,14 @@ Action:OnDFGMCommand(int client, int args)
 void StartVote()
 {
     new Menu:menu = CreateMenu(HandleVoteMenu);
-    SetMenuTitle(menu, "Enable Few Good Men?");
+    if (gFGMEnabled)
+    {
+        SetMenuTitle(menu, "Keep Few Good Men enabled?");
+    }
+    else
+    {
+        SetMenuTitle(menu, "Enable Few Good Men?");
+    }
     AddMenuItem(menu, "yes", "Yes");
     AddMenuItem(menu, "no", "No");
     SetMenuExitButton(menu, false);
@@ -194,6 +202,7 @@ void VoteResult(Menu:menu, int num_votes, int num_clients, const int[][] client_
         // FGM is enabled
         if (gFGMEnabled == true)
         {
+            DisableFGM();
             PrintToChatAll("[FewGoodMen] Vote to disable fgm succeeded.");
         }
         else // FGM is already disabled
@@ -224,9 +233,11 @@ void EnableFGM()
     // Start paying attention to round wins
     HookEvent("teamplay_round_win", OnRoundWin);
     HookEvent("teamplay_round_start", OnRoundStart);
-    HookEvent("player_team", OnTeamChange);
+    AddCommandListener(OnTeamChange, "jointeam");
+    // HookEvent("player_team", OnTeamChange);
     // Disable autobalance so we don't have problems
     ServerCommand("mp_autoteambalance 0");
+    ServerCommand("mp_teams_unbalance_limit 0");
 }
 
 void DisableFGM()
@@ -235,9 +246,10 @@ void DisableFGM()
     // Stop paying attention to round wins
     UnhookEvent("teamplay_round_win", OnRoundWin);
     UnhookEvent("teamplay_round_start", OnRoundStart);
-    UnhookEvent("player_team", OnTeamChange);
+    RemoveCommandListener(OnTeamChange, "jointeam");
     // Re-enable autobalance
     ServerCommand("mp_autoteambalance 1");
+    ServerCommand("mp_teams_unbalance_limit 1");
 }
 
 public HandleVoteMenu(Menu:menu, MenuAction:action, param1, param2)
@@ -260,7 +272,7 @@ Action:OnRoundWin(Event:event, const char[] name, bool dontBroadcast)
         HandleWinningTeam(winner);
     }
     // Update scoreHistory
-    for(int i = 0; i <= MaxClients; i++)
+    for(int i = 1; i <= MaxClients; i++)
     {
         if (IsClientInGame(i))
         {
@@ -299,7 +311,7 @@ void HandleWinningTeam(int latestWinner)
             if (gConsecutiveWins == 0)
             {
                 // The consecutive winner lost twice in a row
-                winningTeam = 3 - latestWinner;
+                winningTeam = latestWinner;
                 gConsecutiveWins = 2;
             }
             else
@@ -367,7 +379,7 @@ int GetLowestScoreOnWinningTeam()
     int lowestScore = 2048; // Arbitrarily large 
     int index = 0;
     // Get minimum score on winning team
-    for(int i = 0; i <= MaxClients; i++)
+    for(int i = 1; i <= MaxClients; i++)
     {
         if (IsClientInGame(i) && (GetClientTeam(i) == winningTeam))
         {
@@ -397,17 +409,27 @@ int GetPlayerResourceTotalScore(int client)
     return GetEntProp(playerSourceEnt, Prop_Send, "m_iTotalScore", _, client);
 }
 
-// If player attempts to change teams to winning team, send them to losing team
-Action:OnTeamChange(Event:event, const char[] name, bool dontBroadcast)
+
+Action:OnTeamChange(int client, const char[] command, int argc)
 {
-    if (event.GetInt("team") == winningTeam)
+    char argument[5];
+    GetCmdArg(1, argument, sizeof(argument));
+    if (strcmp(argument, "red", false) == 0 && winningTeam == RED_TEAM)
     {
-        // They've joined the winning team.
-        int clientID = GetClientOfUserId(event.GetInt("userid"));
-        // Move them to losing team
-        ChangeClientTeam(clientID, 5 - winningTeam);
-        // Send message explaining
-        PrintToChat(clientID, "[FewGoodMen] You may not join the winning team.");
+        PrintToChat(client, "[FewGoodMen] You may not join the winning team.");
+        return Plugin_Handled;
     }
-    return Plugin_Handled;
+    else if (strcmp(argument, "blue", false) == 0 && winningTeam == BLU_TEAM)
+    {
+        PrintToChat(client, "[FewGoodMen] You may not join the winning team.");
+        return Plugin_Handled;
+    }
+    else if (strcmp(argument, "auto", false) == 0 && winningTeam > 1)
+    {
+        // Change client to losing team
+        ChangeClientTeam(client, 5 - winningTeam);
+        return Plugin_Handled;
+    }
+
+    return Plugin_Continue;
 }
